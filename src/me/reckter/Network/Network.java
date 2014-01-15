@@ -2,63 +2,66 @@ package me.reckter.Network;
 
 import me.reckter.Log;
 import me.reckter.Network.Packages.BasePackage;
+import me.reckter.Network.Packages.ClientIdPackage;
+import me.reckter.Test.Util;
 
 import java.io.IOException;
 import java.net.*;
-import java.nio.BufferOverflowException;
-import java.util.ArrayList;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.HashMap;
 
 /**
  * Created by mediacenter on 01.01.14.
  */
 public class Network {
-    protected byte sequenz;
-    protected ArrayList<BasePackage> lastPackages;
+    protected int sequenz;
+
     protected Network net;
 
-    //protected BaseLevel level;
-    protected DatagramSocket socket;
+    protected HashMap<Integer, Connection> connections; //clientId's divide every connection
+    protected int maxClients;
+    protected boolean isClient = true;
 
-    protected ArrayList<BasePackage> inputs;
-    protected Lock inputLock = new ReentrantLock();
+    protected int clientId;
+
+    protected DatagramSocket socket;
+    protected int port;
 
     protected NetworkListener listener;
 
-    protected PackageTimer timer;
 
 
     public Network(int port) throws SocketException {
-      //  this.level = level;
         this.net = this;
         this.sequenz = 0;
         this.socket = new DatagramSocket(port);
-        this.inputs = new ArrayList<BasePackage>();
+        this.port = port;
 
-        this.timer = new PackageTimer();
-        this.lastPackages = new ArrayList<BasePackage>();
+        this.connections = new HashMap<Integer, Connection>();
+        this.maxClients = 0;
+
         this.listener = new NetworkListener();
         this.listener.start();
 
     }
 
+    public void isServer(){
+        isClient = false;
+    }
+
 
     public void send(BasePackage pack, InetAddress address, int port){
         try {
-            byte[] header = pack.getHeader().array();
-            byte[] buffer = pack.getBuffer().array();
-            byte[] data = new byte[header.length + buffer.length];
-            for(int i = 0; i < header.length; i++){
-                data[i] = header[i];
-            }
-            for(int i = 0; i < buffer.length; i++){
-                data[header.length + i] = buffer[i];
-            }
+            byte[] data = pack.getDataToSend();
 
             DatagramPacket sendPacket = new DatagramPacket(data, data.length, address, port);
             socket.send(sendPacket);
-            timer.addPackage(pack.getSequenz());
+
+            byte[] headerTmp = pack.getHeader().array();
+            byte[] bufferTmp = pack.getBuffer().array();
+
+            String out = Util.printByteArray(headerTmp) + "  |";
+            out += Util.printByteArray(bufferTmp);
+            Log.info("sending to " + address + ":" + port + ": " + out);
 
         } catch (IOException e) {
             Log.error("got an IOExepction sending a package (inputs: " + address.getHostAddress() + " ; " + port + "): " + e.getMessage());
@@ -83,7 +86,6 @@ public class Network {
 
     class NetworkListener extends Thread{
         public void run(){
-            byte[] inData = new byte[128];
             try {
                 socket.setSoTimeout(20);
             } catch (SocketException e) {
@@ -91,28 +93,61 @@ public class Network {
             }
             while(true){
                 try {
+                    byte[] inData = new byte[128];
                     DatagramPacket receivePacket = new DatagramPacket(inData, inData.length);
 
                     socket.receive(receivePacket);
                     //socket.setReceiveBufferSize(128);
 
-                    //TODO implement package exepting logick here
-                    inputLock.lock();
-                    try{
+                    //TODO implement package exepting logic here{ //TODO make this code breatier!
                         BasePackage pack = new BasePackage(net);
                         pack.parsePackage(receivePacket.getData());
 
                         pack.setSender(receivePacket.getAddress());
-                        timer.receivedAck(pack);
 
-                        inputs.add(pack);
-                        lastPackages.add(pack);
+                        //only here to print it out
+                        byte[] header = pack.getHeader().array();
+                        byte[] buffer = pack.getBuffer().array();
 
-                    } catch(BufferOverflowException e){
-                        Log.error("BufferOverflowException in the Listener: " + e.getLocalizedMessage());
-                    } finally {
-                        inputLock.unlock();
-                    }
+                        String out = Util.printByteArray(header) + "  |";
+                        out += Util.printByteArray(buffer);
+                        Log.info("Received " + pack.getSender() + ":" + receivePacket.getPort() + ": " + out);
+
+
+                        if(pack.getPackageType() == 1) { //So this is either a client asking for a clientID or the server giving out a clientID
+                            ClientIdPackage clientIdPackage = new ClientIdPackage(net);
+                            clientIdPackage.parsePackage(receivePacket.getData());
+                            clientIdPackage.setSender(receivePacket.getAddress());
+
+                            if(clientIdPackage.getNewClientId() == -1){ //so this is a client asking for a clientID; so we send him a new clientId
+                                connections.put(++maxClients, new Connection(net, receivePacket.getAddress(), clientIdPackage.getPort()));
+
+                                ClientIdPackage responds = new ClientIdPackage(net);
+                                responds.setNewClientId(maxClients);
+                                Log.info("new Client: ID: " + maxClients + " IP: " + receivePacket.getAddress() + ":" + clientIdPackage.getPort());
+
+
+
+                                connections.get(maxClients).receivePackage(clientIdPackage);
+                                connections.get(maxClients).send(responds);
+
+                            } else if(isClient && clientIdPackage.getClientID() == 0){ //so this is a response from the server (and to make sure, that this isn't a client trying to hack the server we asked for isClient
+                                clientId = clientIdPackage.getNewClientId();
+                                Log.info("ID: " + clientId);
+
+                                connections.get(0).receivePackage(clientIdPackage);
+                            }
+                        } else {
+                            int tmp = pack.getClientID();
+                            if(!connections.keySet().contains(tmp)){ //TODO bug here!
+                                Log.error("received invalid clientID and it's not a connection opening Package! ignoring it!");
+                                continue;
+                            }
+
+                            connections.get(pack.getClientID()).receivePackage(pack);
+                        }
+
+
 
                 } catch (SocketTimeoutException e){
 
@@ -124,34 +159,25 @@ public class Network {
         }
     }
 
-
-
-    public ArrayList<BasePackage> getInputs() {
-        ArrayList<BasePackage> ret = new ArrayList<BasePackage>();
-        inputLock.lock();
-        try {
-            ret = inputs;
-            inputs = new ArrayList<BasePackage>();
-        } finally {
-            inputLock.unlock();
-        }
-        return ret;
+    public void connectToServer(InetAddress with){
+        Connection connection = new Connection(this, with, 16661); //TODO remove hardcoded server port
+        connections.put(0, connection);
+        connection.open(port);
     }
 
-    public void setInputs(ArrayList<BasePackage> inputs) {
-        inputLock.lock();
-        try {
-            this.inputs = inputs;
-        } finally {
-            inputLock.unlock();
-        }
+    public int getClientId() {
+        return clientId;
     }
 
-    public ArrayList<BasePackage> getLastPackages() {
-        return lastPackages;
+    public void setClientId(int clientId) {
+        this.clientId = clientId;
     }
 
-    public void setLastPackages(ArrayList<BasePackage> lastPackages) {
-        this.lastPackages = lastPackages;
+    public HashMap<Integer, Connection> getConnections() {
+        return connections;
+    }
+
+    public void setConnections(HashMap<Integer, Connection> connections) {
+        this.connections = connections;
     }
 }

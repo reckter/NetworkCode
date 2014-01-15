@@ -1,6 +1,7 @@
 package me.reckter.Test;
 
 import me.reckter.Log;
+import me.reckter.Network.Connection;
 import me.reckter.Network.Network;
 import me.reckter.Network.Packages.BasePackage;
 
@@ -20,32 +21,23 @@ public class Server {
 
         Log.setConsoleLevel(Log.DEBUG);
         Network net = new Network(16661);
+        net.isServer();
         while(true){
-            ArrayList<BasePackage> inputs = net.getInputs();
-            if(inputs.size() > 0){
-                Log.info("Received " + inputs.size() + " packages:");
-                for(BasePackage pack: inputs){
-
-                    byte[] header = pack.getHeader().array();
-                    byte[] buffer = pack.getBuffer().array();
-
-                    String out = Util.printByteArray(header) + "  |";
-                    out += Util.printByteArray(buffer);
-                    Log.info(pack.getSender() + ": " + out);
-
-                    try {
-                        pack.createHeader(++sequenz,0,net.getLastPackages());
-                        net.send(pack, InetAddress.getLocalHost(), 16662);
-                    } catch (UnknownHostException e) {
-                        e.printStackTrace();
-                    }
-                }
-                Log.info("-----------------------------------------------------------------");
-            }
             try {
-                Thread.sleep(100);
+                Thread.sleep(10);
             } catch (InterruptedException e) {
                 e.printStackTrace();
+            }
+            for(Connection con: net.getConnections().values()){
+                for(BasePackage pack: con.getUnprocessedPackages()){
+
+                    BasePackage back = new BasePackage(net);
+
+                    back.setBytes(pack.getBytes());
+
+                    con.send(back);
+                    Log.info("RTT average: " + con.getTimer().getRtt() + " last: " + con.getTimer().getJitter()[0]);
+                }
             }
         }
     }

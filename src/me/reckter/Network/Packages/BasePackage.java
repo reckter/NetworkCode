@@ -125,9 +125,9 @@ public class BasePackage {
             for(BasePackage pack: oldReceivedPackages){
                 if(sequenz - pack.getSequenz() < 32){
                     int packSequenz = pack.getSequenz();
-                    int diff = (newestSequenz - packSequenz) + 1;
+                    int diff = (newestSequenz - packSequenz) - 1;
 
-                    if(diff <= 0 || diff >= 32){
+                    if(diff < 0 || diff >= 32){
                         continue;
                     }
                     String temp1 = bitfield.substring(0, diff);
@@ -135,10 +135,10 @@ public class BasePackage {
                     bitfield = temp1 + "1" + temp2;
 
                 }else if(pack.getSequenz() - sequenz > Integer.MAX_VALUE - 32){
-                    int diff = sequenz + (Integer.MAX_VALUE - pack.getSequenz()) + 1;
+                    int diff = sequenz + (Integer.MAX_VALUE - pack.getSequenz()) - 1;
 
 
-                    if(diff <= 0 || diff >= 32){
+                    if(diff < 0 || diff >= 32){
                         continue;
                     }
                     String temp1 = bitfield.substring(0, diff);
@@ -146,12 +146,12 @@ public class BasePackage {
                     bitfield = temp1 + "1" + temp2;
                 }
             }
-            header.put(Byte.parseByte(bitfield.substring(0,4),2));
-            header.put(Byte.parseByte(bitfield.substring(4,8),2));
-            header.put(Byte.parseByte(bitfield.substring(8,12),2));
-            header.put(Byte.parseByte(bitfield.substring(12,16),2));
-
+            header.put((byte) Integer.parseInt(bitfield.substring(0, 8), 2));
+            header.put((byte) Integer.parseInt(bitfield.substring(8,16),2));
+            header.put((byte) Integer.parseInt(bitfield.substring(16,24),2));
+            header.put((byte) Integer.parseInt(bitfield.substring(24,32),2));
         } else {
+            header.putInt(0);
             header.putInt(0);
         }
         header.putInt(type);
@@ -182,12 +182,12 @@ public class BasePackage {
     }
 
     public int getSequenz(){
-        return buffer.getInt(4);
+        return header.getInt(4);
     }
 
 
     public int getPackageType(){
-        return buffer.getInt(20);
+        return header.getInt(20);
     }
 
     public int getAck(){
@@ -207,6 +207,19 @@ public class BasePackage {
             }
         }
         return ret;
+    }
+
+    public byte[] getDataToSend(){
+        byte[] headerTmp = header.array();
+        byte[] bufferTmp = buffer.array();
+        byte[] data = new byte[headerTmp.length + bufferTmp.length];
+        for(int i = 0; i < headerTmp.length; i++){
+            data[i] = headerTmp[i];
+        }
+        for(int i = 0; i < bufferTmp.length; i++){
+            data[headerTmp.length + i] = bufferTmp[i];
+        }
+        return data;
     }
 
     public ByteBuffer getBytes() {

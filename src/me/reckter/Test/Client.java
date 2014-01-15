@@ -1,6 +1,7 @@
 package me.reckter.Test;
 
 import me.reckter.Log;
+import me.reckter.Network.Connection;
 import me.reckter.Network.Network;
 import me.reckter.Network.Packages.BasePackage;
 import me.reckter.Network.Packages.InputPackage;
@@ -19,36 +20,39 @@ public class Client {
 
     static public void main(String[] args) throws SocketException, UnknownHostException {
 
-        Network net = new Network(16662);
+        int port = 16663;
+        Network net = new Network(port);
         Log.setConsoleLevel(Log.DEBUG);
 
         byte[] data = new byte[20];
-        int sequenz = 0;
+
+        net.connectToServer(InetAddress.getLocalHost());
+
+        BasePackage back = new BasePackage(net);
+        back.setBytes(ByteBuffer.allocate(20).put(randomData(data)));
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        net.getConnections().get(0).send(back);
+
+
         while(true){
-            sequenz++;
-            data = randomData(data);
-
-            TestPackage test = new TestPackage(net);
-            ArrayList<BasePackage> tmp = new ArrayList<BasePackage>();
-
-            test.createHeader(sequenz,1, net.getLastPackages());
-
-            test.setTestData(ByteBuffer.allocate(data.length).put(data));
-            test.setReceiver(InetAddress.getLocalHost());
-
-            byte[] header = test.getHeader().array();
-            byte[] buffer = test.getBuffer().array();
-            String out = Util.printByteArray(header) + "  |";
-            out += Util.printByteArray(buffer);
-
-            Log.info("sending data: " + out);
-
-
-            net.send(test, InetAddress.getLocalHost(),16661);
             try {
-                Thread.sleep(1000);
+                Thread.sleep(10);
             } catch (InterruptedException e) {
                 e.printStackTrace();
+            }
+            for(Connection con: net.getConnections().values()){
+                for(BasePackage pack: con.getUnprocessedPackages()){
+
+                    back = new BasePackage(net);
+                    back.setBytes(pack.getBytes());
+
+                    con.send(back);
+                    Log.info("RTT average: " + con.getTimer().getRtt() + " last: " + con.getTimer().getJitter()[0]);
+                }
             }
         }
     }

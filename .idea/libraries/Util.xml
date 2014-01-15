@@ -2,6 +2,7 @@
   <library name="Util">
     <CLASSES>
       <root url="jar://$PROJECT_DIR$/../Util/out/Util/Util.jar!/" />
+      <root url="jar://$PROJECT_DIR$/../Util/out/Util.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

@@ -29,16 +29,10 @@ public class Util {
 
 
 
-    static public String makeRadable(byte data){
-        if(data <= -100){
-            return " " + Byte.toString(data);
+    static public String makeRadable(byte data) {
+        if(data >= 16 || data < 0){
+            return "  " + Integer.toHexString(((int) (data) << 24) >>> 24);
         }
-        if(data >= 100 || data <= -10){
-            return "  " + Byte.toString(data);
-        }
-        if(data >= 10 || data <= -1){
-            return "   " + Byte.toString(data);
-        }
-        return "    " + Byte.toString(data);
+        return "  0" + Integer.toHexString(((int) (data) << 24) >>> 24);
     }
 }

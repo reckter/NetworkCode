@@ -56,18 +56,29 @@ public class PackageTimer { //TODO implement the function that calculates the wa
         }
     }
 
-    public void pushNewRtt(int newRtt){
-        rtt  += (newRtt - rtt) * 0.1f; //adjusting the rtt 10% in the direction of the most recent rtt
-        for(int i = 1; i < jitter.length; i++){
+    protected void addJitter(int to) {
+        for(int i = 1; i < jitter.length; i++) {
             jitter[i] = jitter[i - 1];
         }
-        jitter[0] = newRtt;
+        jitter[0] = to;
+    }
+
+    public void pushNewRtt(int newRtt){
+        rtt  += (newRtt - rtt) * 0.1f; //adjusting the rtt 10% in the direction of the most recent rtt
+        addJitter(newRtt);
     }
 
     public float getRtt(){
         return rtt;
     }
 
+    public int[] getJitter() {
+        return jitter;
+    }
+
+    public void setJitter(int[] jitter) {
+        this.jitter = jitter;
+    }
 
     /**
      * 20 packets per seconds is a speed of 50ms
