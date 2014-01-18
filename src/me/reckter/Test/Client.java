@@ -35,7 +35,7 @@ public class Client {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        net.getConnections().get(0).send(back);
+        //net.getConnections().get(0).send(back);
 
 
         while(true){

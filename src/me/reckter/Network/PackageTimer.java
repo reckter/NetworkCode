@@ -37,12 +37,15 @@ public class PackageTimer { //TODO implement the function that calculates the wa
 
     public void receivedAckForPackage(int packageID){
         ArrayList<Long[]> packagesToRemove = new ArrayList<Long[]>();
-        for(Long[] pack: packages){
+        ArrayList<Long[]> packagesTmp = new ArrayList<Long[]>();
+        packagesTmp.addAll(packages);
+        for(Long[] pack: packagesTmp){
             if(pack[0] == packageID){
                 packagesToRemove.add(pack);
                 pushNewRtt((int) (System.currentTimeMillis() - pack[1]));
             }
         }
+        packages.removeAll(packagesToRemove);
     }
 
     public void receivedAck(BasePackage pack){

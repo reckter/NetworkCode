@@ -3,6 +3,7 @@ package me.reckter.Network;
 import me.reckter.Log;
 import me.reckter.Network.Packages.BasePackage;
 import me.reckter.Network.Packages.ClientIdPackage;
+import me.reckter.Network.Packages.KeepAlivePackage;
 import me.reckter.Test.Util;
 
 import java.net.InetAddress;
@@ -16,8 +17,14 @@ public class Connection {
 
     protected InetAddress with;
     protected int port;
+    protected int clientID;
 
     protected int sequenz;
+
+    protected long lastPackageSend;
+    protected long lastPackageReceived;
+
+    protected boolean isAlive;
 
     protected PackageTimer timer;
 
@@ -25,21 +32,26 @@ public class Connection {
     protected ArrayList<BasePackage> unprocessedPackages;
 
 
-    public Connection(Network network, InetAddress with,int port) {
+    public Connection(Network network, InetAddress with,int port, int clientID) {
         this.network = network;
         this.with = with;
         this.port = port;
+        this.clientID = clientID;
 
         receivedPackage = new ArrayList<BasePackage>();
         unprocessedPackages = new ArrayList<BasePackage>();
         sequenz = 0;
         timer = new PackageTimer();
+        isAlive = true;
     }
 
     public void send(BasePackage pack){
-        pack.createHeader(++sequenz, network.getClientId(), receivedPackage);
+        ArrayList<BasePackage> receivedPackageTmp = new ArrayList<BasePackage>();
+        receivedPackageTmp.addAll(receivedPackage);
+        pack.createHeader(++sequenz, network.getClientId(), receivedPackageTmp);
         timer.addPackage(pack.getSequenz());
         network.send(pack, with, port);
+        lastPackageSend = System.currentTimeMillis();
     }
 
     public void receivePackage(BasePackage pack){
@@ -48,6 +60,8 @@ public class Connection {
         if(!(pack instanceof ClientIdPackage)){
             unprocessedPackages.add(pack);
         }
+        lastPackageReceived = System.currentTimeMillis();
+
     }
 
     public void open(int clientPort){
@@ -69,6 +83,18 @@ public class Connection {
         unprocessedPackages = new ArrayList<BasePackage>();
         return tmp;
     }
+
+    public void keepAlive(){
+        if(System.currentTimeMillis() - lastPackageSend > 100){
+            KeepAlivePackage pack = new KeepAlivePackage(network);
+            send(pack);
+        }
+        if(System.currentTimeMillis() - lastPackageReceived > 1000) {
+            isAlive = false;
+        }
+    }
+
+
 
     public InetAddress getWith() {
         return with;
@@ -106,4 +132,15 @@ public class Connection {
         return timer;
     }
 
+    public boolean isAlive() {
+        return isAlive;
+    }
+
+    public int getClientID() {
+        return clientID;
+    }
+
+    public void setClientID(int clientID) {
+        this.clientID = clientID;
+    }
 }

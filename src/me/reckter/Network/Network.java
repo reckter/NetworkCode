@@ -7,6 +7,7 @@ import me.reckter.Test.Util;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.Collection;
 import java.util.HashMap;
 
 /**
@@ -27,6 +28,7 @@ public class Network {
     protected int port;
 
     protected NetworkListener listener;
+    protected NetworkKeepAliveThread keepAlive;
 
 
 
@@ -41,6 +43,9 @@ public class Network {
 
         this.listener = new NetworkListener();
         this.listener.start();
+
+        this.keepAlive = new NetworkKeepAliveThread();
+        this.keepAlive.start();
 
     }
 
@@ -83,6 +88,36 @@ public class Network {
 
     }
 
+    public void keepConnectionsAlive(){
+
+        Collection<Connection> cons = connections.values();
+        for(Connection con : cons){
+            con.keepAlive();
+            if(!con.isAlive()){
+                connections.remove(con.getClientID());
+                Log.info("Lost connection to (ID: " + con.clientID + " IP: " + con.getWith().getHostAddress() + ")[time out]");
+            }
+        }
+    }
+
+    class NetworkKeepAliveThread extends Thread{
+        public void run(){
+
+            while (true){
+                keepConnectionsAlive();
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    protected boolean packageIsAccepted(BasePackage pack) {
+        boolean protocolIsRight = pack.getProtocolID() == pack.getCodedProtocolID();
+        return protocolIsRight;
+    }
 
     class NetworkListener extends Thread{
         public void run(){
@@ -99,53 +134,56 @@ public class Network {
                     socket.receive(receivePacket);
                     //socket.setReceiveBufferSize(128);
 
-                    //TODO implement package exepting logic here{ //TODO make this code breatier!
-                        BasePackage pack = new BasePackage(net);
-                        pack.parsePackage(receivePacket.getData());
+                    // TODO make this code breatier!
+                    BasePackage pack = new BasePackage(net);
+                    pack.parsePackage(receivePacket.getData());
 
-                        pack.setSender(receivePacket.getAddress());
+                    pack.setSender(receivePacket.getAddress());
+                    if(!packageIsAccepted(pack)){
+                        continue;
+                    }
 
-                        //only here to print it out
-                        byte[] header = pack.getHeader().array();
-                        byte[] buffer = pack.getBuffer().array();
+                    //only here to print it out
+                    byte[] header = pack.getHeader().array();
+                    byte[] buffer = pack.getBuffer().array();
 
-                        String out = Util.printByteArray(header) + "  |";
-                        out += Util.printByteArray(buffer);
-                        Log.info("Received " + pack.getSender() + ":" + receivePacket.getPort() + ": " + out);
-
-
-                        if(pack.getPackageType() == 1) { //So this is either a client asking for a clientID or the server giving out a clientID
-                            ClientIdPackage clientIdPackage = new ClientIdPackage(net);
-                            clientIdPackage.parsePackage(receivePacket.getData());
-                            clientIdPackage.setSender(receivePacket.getAddress());
-
-                            if(clientIdPackage.getNewClientId() == -1){ //so this is a client asking for a clientID; so we send him a new clientId
-                                connections.put(++maxClients, new Connection(net, receivePacket.getAddress(), clientIdPackage.getPort()));
-
-                                ClientIdPackage responds = new ClientIdPackage(net);
-                                responds.setNewClientId(maxClients);
-                                Log.info("new Client: ID: " + maxClients + " IP: " + receivePacket.getAddress() + ":" + clientIdPackage.getPort());
+                    String out = Util.printByteArray(header) + "  |";
+                    out += Util.printByteArray(buffer);
+                    Log.info("Received " + pack.getSender() + ":" + receivePacket.getPort() + ": " + out);
 
 
+                    if(pack.getPackageType() == 1) { //So this is either a client asking for a clientID or the server giving out a clientID
+                        ClientIdPackage clientIdPackage = new ClientIdPackage(net);
+                        clientIdPackage.parsePackage(receivePacket.getData());
+                        clientIdPackage.setSender(receivePacket.getAddress());
 
-                                connections.get(maxClients).receivePackage(clientIdPackage);
-                                connections.get(maxClients).send(responds);
+                        if(clientIdPackage.getNewClientId() == -1){ //so this is a client asking for a clientID; so we send him a new clientId
+                            connections.put(++maxClients, new Connection(net, receivePacket.getAddress(), clientIdPackage.getPort(), maxClients));
 
-                            } else if(isClient && clientIdPackage.getClientID() == 0){ //so this is a response from the server (and to make sure, that this isn't a client trying to hack the server we asked for isClient
-                                clientId = clientIdPackage.getNewClientId();
-                                Log.info("ID: " + clientId);
+                            ClientIdPackage responds = new ClientIdPackage(net);
+                            responds.setNewClientId(maxClients);
+                            Log.info("new Client: ID: " + maxClients + " IP: " + receivePacket.getAddress() + ":" + clientIdPackage.getPort());
 
-                                connections.get(0).receivePackage(clientIdPackage);
-                            }
-                        } else {
-                            int tmp = pack.getClientID();
-                            if(!connections.keySet().contains(tmp)){ //TODO bug here!
-                                Log.error("received invalid clientID and it's not a connection opening Package! ignoring it!");
-                                continue;
-                            }
 
-                            connections.get(pack.getClientID()).receivePackage(pack);
+
+                            connections.get(maxClients).receivePackage(clientIdPackage);
+                            connections.get(maxClients).send(responds);
+
+                        } else if(isClient && clientIdPackage.getClientID() == 0){ //so this is a response from the server (and to make sure, that this isn't a client trying to hack the server we asked for isClient
+                            clientId = clientIdPackage.getNewClientId();
+                            Log.info("ID: " + clientId);
+
+                            connections.get(0).receivePackage(clientIdPackage);
                         }
+                    } else {
+                        int tmp = pack.getClientID();
+                        if(!connections.keySet().contains(tmp)){ //TODO bug here!
+                            Log.error("received invalid clientID and it's not a connection opening Package! ignoring it!");
+                            continue;
+                        }
+
+                        connections.get(pack.getClientID()).receivePackage(pack);
+                    }
 
 
 
@@ -160,7 +198,7 @@ public class Network {
     }
 
     public void connectToServer(InetAddress with){
-        Connection connection = new Connection(this, with, 16661); //TODO remove hardcoded server port
+        Connection connection = new Connection(this, with, 16661, 0); //TODO remove hardcoded server port
         connections.put(0, connection);
         connection.open(port);
     }

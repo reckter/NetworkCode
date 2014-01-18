@@ -104,11 +104,11 @@ public class BasePackage {
 
     public void createHeader(int sequenz, int ClientID, ArrayList<BasePackage> oldReceivedPackages){
         header.clear();
-        header.putInt(GAMEID + VERSIONID);
+        header.putInt(getCodedProtocolID());
         header.putInt(sequenz);
         header.putInt(ClientID);
         if(oldReceivedPackages.size() != 0){
-        BasePackage newestPackage = oldReceivedPackages.get(0);
+            BasePackage newestPackage = oldReceivedPackages.get(0);
             for(BasePackage pack: oldReceivedPackages){
                 if(network.isMoreRecent(pack.getSequenz(), newestPackage.getSequenz())){
                     newestPackage = pack;
@@ -171,6 +171,10 @@ public class BasePackage {
             buffer.put(data[i]);
         }
 
+    }
+
+    public int getCodedProtocolID(){
+        return GAMEID + VERSIONID;
     }
 
     public int getProtocolID(){
