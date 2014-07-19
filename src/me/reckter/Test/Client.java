@@ -4,14 +4,11 @@ import me.reckter.Log;
 import me.reckter.Network.Connection;
 import me.reckter.Network.Network;
 import me.reckter.Network.Packages.BasePackage;
-import me.reckter.Network.Packages.InputPackage;
-import me.reckter.Network.Packages.TestPackage;
 
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 
 /**
  * Created by mediacenter on 09.01.14.
@@ -45,13 +42,11 @@ public class Client {
                 e.printStackTrace();
             }
             for(Connection con: net.getConnections().values()){
-                for(BasePackage pack: con.getUnprocessedPackages()){
-
-                    back = new BasePackage(net);
-                    back.setBytes(pack.getBytes());
-
-                    con.send(back);
-                    Log.info("RTT average: " + con.getTimer().getRtt() + " last: " + con.getTimer().getJitter()[0]);
+                for(BasePackage pack: con.getUnprocessedPackages()) {
+                    if(pack.getPackageType() == 3) {
+                        Log.info("prime: " + pack.getBytes().getInt(0));
+                    }
+                   // Log.info("RTT average: " + con.getTimer().getRtt() + " last: " + con.getTimer().getJitter()[0]);
                 }
             }
         }

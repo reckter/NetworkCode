@@ -149,7 +149,7 @@ public class Network {
 
                     String out = Util.printByteArray(header) + "  |";
                     out += Util.printByteArray(buffer);
-                    Log.info("Received " + pack.getSender() + ":" + receivePacket.getPort() + ": " + out);
+                   // Log.info("Received " + pack.getSender() + ":" + receivePacket.getPort() + ": " + out);
 
 
                     if(pack.getPackageType() == 1) { //So this is either a client asking for a clientID or the server giving out a clientID

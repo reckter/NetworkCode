@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 public class TestPackage extends BasePackage {
     public TestPackage(Network network) {
         super(network);
+        this.type = 3;
     }
 
 

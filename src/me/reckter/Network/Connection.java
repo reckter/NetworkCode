@@ -26,8 +26,6 @@ public class Connection {
 
     protected boolean isAlive;
 
-    protected PackageTimer timer;
-
     protected ArrayList<BasePackage> receivedPackage;
     protected ArrayList<BasePackage> unprocessedPackages;
 
@@ -41,7 +39,6 @@ public class Connection {
         receivedPackage = new ArrayList<BasePackage>();
         unprocessedPackages = new ArrayList<BasePackage>();
         sequenz = 0;
-        timer = new PackageTimer();
         isAlive = true;
     }
 
@@ -49,13 +46,11 @@ public class Connection {
         ArrayList<BasePackage> receivedPackageTmp = new ArrayList<BasePackage>();
         receivedPackageTmp.addAll(receivedPackage);
         pack.createHeader(++sequenz, network.getClientId(), receivedPackageTmp);
-        timer.addPackage(pack.getSequenz());
-        network.send(pack, with, port);
         lastPackageSend = System.currentTimeMillis();
+        network.send(pack, with, port);
     }
 
     public void receivePackage(BasePackage pack){
-        timer.receivedAck(pack);
         receivedPackage.add(pack);
         if(!(pack instanceof ClientIdPackage)){
             unprocessedPackages.add(pack);
@@ -68,6 +63,9 @@ public class Connection {
         ClientIdPackage pack = new ClientIdPackage(network);
         pack.setNewClientId(-1);
         pack.setPort(clientPort);
+
+        lastPackageReceived = System.currentTimeMillis();
+
         send(pack);
 
         byte[] header = pack.getHeader().array();
@@ -126,10 +124,6 @@ public class Connection {
 
     public void setReceivedPackage(ArrayList<BasePackage> receivedPackage) {
         this.receivedPackage = receivedPackage;
-    }
-
-    public PackageTimer getTimer() {
-        return timer;
     }
 
     public boolean isAlive() {
